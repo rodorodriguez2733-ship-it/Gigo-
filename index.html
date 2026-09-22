@@ -183,7 +183,7 @@ html,body{height:100%;overflow:hidden}
 <div class="logo"><div class="brandText"><div class="logoMain">GIGO BARBER</div></div></div>
 <div style="display:flex;gap:8px"><div class="switch"><button id="light" class="active">☀</button><button id="dark">☾</button></div><button class="icon" id="gear">⚙</button></div>
 </header>
-<div class="sync"><span class="dot" id="syncDot"></span><span id="syncText">Conectando con Firebase…</span> · <b>GIGO INDEPENDIENTE · SERIAL</b></div>
+<div class="sync"><span class="dot" id="syncDot"></span><span id="syncText">Conectando con Firebase…</span> · <b>GIGO V3 · CITAS CORREGIDAS</b></div>
 <div class="mainCuadreBar">
   <button type="button" id="mainCuadreBtn" class="mainCuadreBtn">💵 Cuadre Día / Semana / Mes</button>
 </div>
@@ -334,14 +334,39 @@ if(!a)row.classList.add("available");if(a&&current(d,t))row.classList.add("curre
 let center=a?`<div class="name">${a.client||"Cita"}${current(d,t)?'<span class="now">Ahora</span>':""}</div><div class="svc">${(a.services||[]).map(x=>x.name).join(" + ")||"Sin servicio"} · $${total(a).toFixed(2)}</div>`:`<div class="svc">— Disponible —</div>`;
 if(a)sum+=total(a);
 row.innerHTML=`<div class="time">${showTime(t)}</div><div>${center}</div><div class="actions">${a?'<button class="edit">✎</button><button class="trash">⌫</button>':""}</div>`;
-if(a){row.querySelector(".name").onclick=async e=>{e.stopPropagation();if(confirm("¿Borrar esta cita?"))await deleteDoc(doc(db,"appointments",id))};row.querySelector(".edit").onclick=e=>{e.stopPropagation();openAppt(d,t,id)};row.querySelector(".trash").onclick=async e=>{e.stopPropagation();if(confirm("¿Eliminar esta cita?"))await deleteDoc(doc(db,"appointments",id))}}
+if(a){row.querySelector(".name").onclick=async e=>{e.stopPropagation();if(confirm("¿Borrar esta cita?"))await deleteDoc(doc(db,"gigo_appointments",id))};row.querySelector(".edit").onclick=e=>{e.stopPropagation();openAppt(d,t,id)};row.querySelector(".trash").onclick=async e=>{e.stopPropagation();if(confirm("¿Eliminar esta cita?"))await deleteDoc(doc(db,"gigo_appointments",id))}}
 row.onclick=()=>openAppt(d,t,a?id:null);$("schedule").appendChild(row)}
 $("dayTotal").textContent=sum.toFixed(2)}
 function buildPicker(a={}){$("picker").innerHTML="";let map={};(a.services||[]).forEach(s=>map[s.name]=s.price);settings.services.forEach(s=>{let checked=map[s.name]!==undefined,row=document.createElement("div");row.className="pick";row.innerHTML=`<input class="check" data-name="${s.name}" type="checkbox" ${checked?"checked":""}><div>${s.icon||"✦"}</div><div><b>${s.name}</b></div><input class="pval" data-name="${s.name}" type="number" min="0" step=".01" value="${checked?map[s.name]:s.price}">`;$("picker").appendChild(row)});document.querySelectorAll(".check,.pval").forEach(x=>x.oninput=calc)}
 function calc(){let s=0;document.querySelectorAll(".check").forEach(c=>{if(c.checked){let p=[...document.querySelectorAll(".pval")].find(x=>x.dataset.name===c.dataset.name);s+=Number(p?.value||0)}});$("apptTotal").textContent=s.toFixed(2)}
 function openAppt(d,t,id=null){editing=id;let a=id?appointments[id]:{};$("apptTitle").textContent=id?"Editar cita":"Nueva cita";$("dateInput").value=d;$("timeInput").value=t;$("timeInput").step=settings.interval*60;$("clientInput").value=a?.client||"";$("phoneInput").value=a?.phone||"";$("notesInput").value=a?.notes||"";buildPicker(a||{});calc();$("delAppt").style.display=id?"inline-block":"none";$("apptDlg").showModal()}
-$("apptForm").onsubmit=async e=>{e.preventDefault();let d=$("dateInput").value,t=$("timeInput").value,id=idFor(d,t),services=[];document.querySelectorAll(".check").forEach(c=>{if(c.checked){let p=[...document.querySelectorAll(".pval")].find(x=>x.dataset.name===c.dataset.name);services.push({name:c.dataset.name,price:Number(p?.value||0)})}});if(editing&&editing!==id)await deleteDoc(doc(db,"appointments",editing));await setDoc(doc(db,"appointments",id),{id,date:d,time:t,client:$("clientInput").value.trim(),phone:$("phoneInput").value.trim(),notes:$("notesInput").value.trim(),services,updatedAt:Date.now()});$("apptDlg").close()}
-$("delAppt").onclick=async()=>{if(editing&&confirm("¿Eliminar esta cita?")){await deleteDoc(doc(db,"appointments",editing));$("apptDlg").close()}};$("cancelAppt").onclick=()=>$("apptDlg").close();
+$("apptForm").onsubmit=async e=>{
+  e.preventDefault();
+  try{
+    let d=$("dateInput").value,t=$("timeInput").value,id=idFor(d,t),services=[];
+    document.querySelectorAll(".check").forEach(c=>{
+      if(c.checked){
+        let p=[...document.querySelectorAll(".pval")].find(x=>x.dataset.name===c.dataset.name);
+        services.push({name:c.dataset.name,price:Number(p?.value||0)})
+      }
+    });
+    if(editing&&editing!==id)await deleteDoc(doc(db,"gigo_appointments",editing));
+    await setDoc(doc(db,"gigo_appointments",id),{
+      id,date:d,time:t,
+      client:$("clientInput").value.trim(),
+      phone:$("phoneInput").value.trim(),
+      notes:$("notesInput").value.trim(),
+      services,updatedAt:Date.now()
+    });
+    sync(true,"Cita guardada correctamente");
+    $("apptDlg").close();
+  }catch(err){
+    console.error(err);
+    sync(false,"No se pudo guardar la cita");
+    alert("No se pudo guardar la cita. Revisa Firebase o las reglas de Firestore.");
+  }
+}
+$("delAppt").onclick=async()=>{if(editing&&confirm("¿Eliminar esta cita?")){await deleteDoc(doc(db,"gigo_appointments",editing));$("apptDlg").close()}};$("cancelAppt").onclick=()=>$("apptDlg").close();
 $("prev").onclick=()=>{day.setDate(day.getDate()-1);render()};$("next").onclick=()=>{day.setDate(day.getDate()+1);render()};$("today").onclick=()=>{day=new Date();render()};$("newBtn").onclick=()=>openAppt(ymd(day),"09:00");$("menu").onclick=()=>$("side").classList.toggle("open");
 $("light").onclick=async()=>{settings.theme="light";applyTheme();await setDoc(settingsRef,settings)};$("dark").onclick=async()=>{settings.theme="dark";applyTheme();await setDoc(settingsRef,settings)};
 function customServices(){return settings.services.filter(s=>!["Recorte","Barba","Cejas","Refine"].includes(s.name))}
