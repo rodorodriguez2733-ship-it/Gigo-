@@ -171,7 +171,7 @@ html,body{height:100%;overflow:hidden}
     <div class="serialLogo">✂</div>
     <h2>GIGO BARBER</h2>
     <p>Esta aplicación requiere un serial válido para activarse.</p>
-    <input id="serialInput" class="serialInput" placeholder="Ej. GIGO-XXXX-XXXX-XXXX">
+    <input id="serialInput" class="serialInput" placeholder="Ej. GIGO-XXXX-XXXX-YYYYMMDD-XXXX-XXXX">
     <button type="button" id="serialActivate" class="serialActivate">Activar serial</button>
     <div id="serialStatus" class="serialStatus"></div>
   </div>
@@ -272,18 +272,27 @@ function gigoFNV1a(str){let h=0x811c9dc5;for(let i=0;i<str.length;i++){h^=str.ch
 function normalizeSerial(s){return (s||"").toUpperCase().replace(/[^A-Z0-9]/g,"");}
 function verifyGigoSerial(serial){
   const raw=normalizeSerial(serial);
-  if(!raw.startsWith("GIGO") || raw.length<16) return false;
-  const body=raw.slice(4,-8),sig=raw.slice(-8);
-  return gigoFNV1a(GIGO_SERIAL_SECRET+"|"+body)===sig;
+  if(!raw.startsWith("GIGO") || raw.length<24) return {ok:false,error:"Serial inválido."};
+  const core=raw.slice(4);
+  const expiry=core.slice(-16,-8);
+  const sig=core.slice(-8);
+  const body=core.slice(0,-16);
+  if(!/^\d{8}$/.test(expiry)) return {ok:false,error:"Serial inválido."};
+  const expected=gigoFNV1a(GIGO_SERIAL_SECRET+"|"+body+"|"+expiry);
+  if(expected!==sig) return {ok:false,error:"Serial inválido."};
+  const y=Number(expiry.slice(0,4)),m=Number(expiry.slice(4,6)),d=Number(expiry.slice(6,8));
+  const exp=new Date(y,m-1,d,23,59,59);
+  if(new Date()>exp) return {ok:false,error:"Este serial venció el "+d+"/"+m+"/"+y+"."};
+  return {ok:true,expiry};
 }
 function activateSavedSerial(){
   const saved=localStorage.getItem(GIGO_SERIAL_KEY);
-  if(saved && verifyGigoSerial(saved)){document.getElementById("serialGate").style.display="none";return true;}
+  const vr=saved?verifyGigoSerial(saved):{ok:false};if(saved && vr.ok){document.getElementById("serialGate").style.display="none";return true;}
   document.getElementById("serialGate").style.display="flex";return false;
 }
 document.getElementById("serialActivate")?.addEventListener("click",()=>{
   const input=document.getElementById("serialInput").value,st=document.getElementById("serialStatus");
-  if(!verifyGigoSerial(input)){st.style.color="#d62828";st.textContent="Serial inválido.";return;}
+  const vr=verifyGigoSerial(input);if(!vr.ok){st.style.color="#d62828";st.textContent=vr.error;return;}
   localStorage.setItem(GIGO_SERIAL_KEY,input);
   st.style.color="#16833d";st.textContent="Serial activado correctamente.";
   setTimeout(()=>document.getElementById("serialGate").style.display="none",300);
